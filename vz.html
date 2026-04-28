@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png"
+      href="https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Vecteezy_logo.svg/960px-Vecteezy_logo.svg.png">
+
+<title>Vecteezy Media URL Generator</title>
+
+<style>
+:root {
+  --grad-main: linear-gradient(90deg, #6a11cb, #2575fc);
+  --grad-card: linear-gradient(135deg, #f5f7fa, #e4ecff);
+  --grad-btn: linear-gradient(90deg, #ff6a00, #ffb347);
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f7f9fc;
+  margin: 0;
+  padding: 40px 20px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+}
+
+/* ===== TITLE ===== */
+h1 {
+  text-align: center;
+  font-size: 42px;
+  font-weight: 800;
+  background: var(--grad-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 40px;
+}
+
+  h1 a {
+  text-decoration: none;
+  background: var(--grad-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  cursor: pointer;
+}
+
+h1 a:hover {
+  opacity: 0.85;
+}
+
+
+/* ===== INPUT ROW ===== */
+.input-row {
+  display: flex;
+  gap: 12px;
+}
+
+.input-row input {
+  flex: 1;
+  font-size: 16px;
+  padding: 14px 12px;
+  border: 3px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(#f7f9fc, #f7f9fc) padding-box,
+    var(--grad-main) border-box;
+  outline: none;
+}
+
+
+.input-row button {
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 10px;
+  background: var(--grad-btn);
+  color: white;
+  cursor: pointer;
+  transition: transform .2s, box-shadow .2s;
+}
+
+.input-row button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0,0,0,.15);
+}
+
+/* ===== CARD ===== */
+.card {
+  margin-top: 35px;
+  padding: 25px;
+  border-radius: 18px;
+  background: var(--grad-card);
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+}
+
+.card h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #444;
+  font-style: italic;
+}
+
+.card img {
+  margin-top: 15px;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  display: none;
+}
+
+.card textarea {
+  width: 100%;
+  height: 65px;
+  resize: none;
+  margin-top: 10px;
+
+  box-sizing: border-box;
+
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #ccc;
+
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.error {
+  margin-top: 10px;
+  color: #d9534f;
+  display: none;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>
+  <a href="#" onclick="resetInput(event)">Vecteezy Media URL Generator</a>
+</h1>
+
+
+<div class="input-row">
+  <input id="pageUrl" placeholder="Paste vecteezy URLs here!" />
+  <button onclick="convert()">Convert</button>
+</div>
+
+<div id="output"></div>
+
+</div>
+
+<script>
+function resetInput(e) {
+  e.preventDefault();
+  document.getElementById("pageUrl").value = "";
+  document.getElementById("output").innerHTML = "";
+}
+
+/* =========================
+   PARSE VECTEEZY URL
+========================= */
+function parseVecteezy(url) {
+
+  /* ===== VIDEO ===== */
+  if (url.includes("/video/")) {
+    const m = url.match(/video\/(\d+)-(.+)/);
+    if (!m) return null;
+
+    const id = m[1].padStart(9, "0");
+    const slug = m[2];
+
+    const folder =
+      id.slice(0,3) + "/" +
+      id.slice(3,6) + "/" +
+      id.slice(6,9);
+
+    return {
+      type: "video",
+      folder,
+      slug
+    };
+  }
+
+  /* ===== EDITORIAL ===== */
+  if (url.includes("/editorial/")) {
+    const m = url.match(/\/([^\/]+)-(\d+)$/);
+    if (!m) return null;
+
+    const slug = m[1];
+    const id = m[2].padStart(9, "0");
+
+    const folder =
+      id.slice(0,3) + "/" +
+      id.slice(3,6) + "/" +
+      id.slice(6,9);
+
+    return {
+      type: "editorial",
+      folder,
+      slug,
+      suffix: "editorial_image",
+      ext: "jpg"
+    };
+  }
+
+  /* ===== VECTOR / PHOTO / PNG ===== */
+  const m = url.match(/vecteezy\.com\/(vector-art|photo|png)\/(\d+)-(.+)/);
+  if (!m) return null;
+
+  let slug = m[3];
+  const type = m[1];
+
+  if (type === "vector-art") {
+    slug = slug.replace(/-vector-/g, "-");
+  }
+
+  const id = m[2].padStart(9, "0");
+  const folder =
+    id.slice(0,3) + "/" +
+    id.slice(3,6) + "/" +
+    id.slice(6,9);
+
+  const suffix =
+    type === "vector-art" ? "vector" :
+    type === "photo" ? "photo" : "png";
+
+  const ext = type === "png" ? "png" : "jpg";
+
+  return { type, folder, slug, suffix, ext };
+}
+
+/* =========================
+   BUILD FILENAMES
+========================= */
+function buildNames(slug, suffix, ext, type) {
+
+  if (type === "editorial") {
+    return [`${slug}-free-${suffix}.${ext}`];
+  }
+
+  const names = [];
+  if (!slug.endsWith(`-${suffix}`)) names.push(`${slug}-${suffix}.${ext}`);
+  names.push(`${slug}.${ext}`);
+  if (!slug.endsWith(`-${suffix}`))
+    names.push(`${slug}-free-${suffix}.${ext}`);
+  else
+    names.push(`${slug.replace(`-${suffix}`, `-free-${suffix}`)}.${ext}`);
+  names.push(`${suffix}-${slug}.${ext}`);
+
+  return names;
+}
+
+/* =========================
+   IMAGE CARD
+========================= */
+function createImageCard(title, base, names) {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  card.innerHTML = `
+    <h3>${title}</h3>
+    <div class="hint">Right click on the image to save it!</div>
+  `;
+
+  const img = document.createElement("img");
+  const textarea = document.createElement("textarea");
+  textarea.readOnly = true;
+
+  const error = document.createElement("div");
+  error.className = "error";
+  error.textContent = "Image not found or blocked.";
+
+  card.append(img, textarea, error);
+
+  let i = 0;
+  function tryNext() {
+    if (i >= names.length) {
+      error.style.display = "block";
+      return;
+    }
+
+    const url = base + names[i];
+    textarea.value = url;
+
+    img.onload = () => img.style.display = "block";
+    img.onerror = () => { i++; tryNext(); };
+    img.src = url;
+  }
+
+  tryNext();
+  return card;
+}
+
+/* =========================
+   VIDEO CARD
+========================= */
+function createVideoCard(title, base, slug) {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  card.innerHTML = `
+    <h3>${title}</h3>
+    <div class="hint">Right click on the video to save it!</div>
+    <br>
+  `;
+
+  const video = document.createElement("video");
+  video.controls = true;
+  video.style.maxWidth = "100%";
+  video.style.borderRadius = "12px";
+
+  const textarea = document.createElement("textarea");
+  textarea.readOnly = true;
+
+  const error = document.createElement("div");
+  error.className = "error";
+  error.textContent = "Video not found or blocked.";
+
+  card.append(video, textarea, error);
+
+  const urls = [
+    `${base}${slug}-video.mp4`,
+    `${base}${slug}-free-video.mp4`
+  ];
+
+  let i = 0;
+  function tryNext() {
+    if (i >= urls.length) {
+      error.style.display = "block";
+      return;
+    }
+
+    textarea.value = urls[i];
+    video.src = urls[i];
+
+    video.onloadeddata = () => {};
+    video.onerror = () => { i++; tryNext(); };
+  }
+
+  tryNext();
+  return card;
+}
+
+/* =========================
+   MAIN
+========================= */
+function convert() {
+  const output = document.getElementById("output");
+  output.innerHTML = "";
+
+  const data = parseVecteezy(pageUrl.value.trim());
+  if (!data) {
+    alert("Unsupported or invalid Vecteezy URL");
+    return;
+  }
+
+  /* ===== VIDEO ===== */
+  if (data.type === "video") {
+    const thumbNames = buildNames(data.slug, "video", "jpg", "photo");
+
+    output.append(
+      createImageCard(
+        "Small Size",
+        `https://static.vecteezy.com/system/resources/thumbnails/${data.folder}/small/`,
+        thumbNames
+      ),
+      createImageCard(
+        "Large Size",
+        `https://static.vecteezy.com/system/resources/thumbnails/${data.folder}/large/`,
+        thumbNames
+      ),
+      createVideoCard(
+        "Video Preview",
+        `https://static.vecteezy.com/system/resources/previews/${data.folder}/mp4/`,
+        data.slug
+      )
+    );
+    return;
+  }
+
+  /* ===== IMAGE / EDITORIAL ===== */
+  const names = buildNames(data.slug, data.suffix, data.ext, data.type);
+
+  output.append(
+    createImageCard(
+      "Small Size",
+      `https://static.vecteezy.com/system/resources/thumbnails/${data.folder}/small/`,
+      names
+    ),
+    createImageCard(
+      "Large Size",
+      `https://static.vecteezy.com/system/resources/thumbnails/${data.folder}/large/`,
+      names
+    ),
+    createImageCard(
+      "Preview Size",
+      `https://static.vecteezy.com/system/resources/previews/${data.folder}/non_2x/`,
+      names
+    )
+  );
+}
+</script>
+
+</body>
+</html>
