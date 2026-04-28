@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>TikTok Bulk Downloader</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+padding:40px;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+}
+
+textarea{
+width:100%;
+height:140px;
+padding:12px;
+border-radius:10px;
+border:none;
+}
+
+button{
+padding:10px 18px;
+border:none;
+border-radius:8px;
+margin-top:10px;
+cursor:pointer;
+}
+
+.convert{background:#ff0050;color:white}
+.downloadAll{background:#22c55e;color:white}
+.reset{background:#64748b;color:white}
+
+button:disabled{
+opacity:0.4;
+cursor:not-allowed;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+gap:20px;
+margin-top:25px;
+}
+
+.card{
+background:#1e293b;
+padding:12px;
+border-radius:12px;
+}
+
+video{
+width:100%;
+border-radius:8px;
+}
+
+.title{
+font-size:13px;
+margin-top:6px;
+color:#ccc;
+
+display:-webkit-box;
+-webkit-line-clamp:2;
+-webkit-box-orient:vertical;
+overflow:hidden;
+}
+
+.title.expanded{
+-webkit-line-clamp:unset;
+}
+
+.moreBtn{
+font-size:12px;
+color:#38bdf8;
+cursor:pointer;
+margin-top:4px;
+display:inline-block;
+}
+
+.id{font-size:12px;color:#aaa;margin-top:5px}
+.status{font-size:12px;color:#facc15;margin-top:5px}
+
+.downloadBtn{
+width:100%;
+margin-top:10px;
+padding:8px;
+border:none;
+border-radius:6px;
+background:#22c55e;
+color:white;
+}
+
+.downloadBtn.done{background:#64748b}
+
+.report{
+margin-top:20px;
+padding:12px;
+border-radius:10px;
+background:#1e293b;
+font-size:14px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>TikTok Bulk Downloader</h2>
+
+<textarea id="links" placeholder="Paste TikTok links or IDs"></textarea>
+
+<br>
+
+<button id="generateBtn" class="convert" disabled>Generate Videos</button>
+<button id="downloadAllBtn" class="downloadAll" disabled>Download All</button>
+<button id="resetBtn" class="reset" disabled>Reset</button>
+
+<div id="report" class="report" style="display:none"></div>
+
+<div id="videos" class="grid"></div>
+
+</div>
+
+<script>
+
+let videos=[]
+let successCount=0
+let failedIds=[]
+
+const textarea=document.getElementById("links")
+const generateBtn=document.getElementById("generateBtn")
+const downloadAllBtn=document.getElementById("downloadAllBtn")
+const resetBtn=document.getElementById("resetBtn")
+const report=document.getElementById("report")
+
+textarea.addEventListener("input",()=>{
+
+generateBtn.disabled=textarea.value.trim()===""
+
+})
+
+function sleep(ms){
+return new Promise(r=>setTimeout(r,ms))
+}
+
+function extractVideoId(input){
+
+input=input.trim()
+
+if(/^\d+$/.test(input)) return input
+
+let match=input.match(/video\/(\d+)/)
+
+if(match) return match[1]
+
+return null
+
+}
+
+function cleanFilename(name){
+
+return name
+.replace(/[\\/:*?"<>|]/g,"")
+.substring(0,80)
+
+}
+
+async function fetchVideoData(id,card,retry=0){
+
+const status=card.querySelector(".status")
+const titleEl=card.querySelector(".title")
+const videoEl=card.querySelector("video")
+const btn=card.querySelector(".downloadBtn")
+
+const tiktokUrl=`https://www.tiktok.com/@user/video/${id}`
+const api=`https://tikwm.com/api/?url=${encodeURIComponent(tiktokUrl)}`
+
+try{
+
+status.innerText="Loading..."
+
+const res=await fetch(api)
+const data=await res.json()
+
+if(!data.data) throw "No data"
+
+const title=data.data.title || id
+const videoUrl=data.data.play
+
+titleEl.innerText=title
+videoEl.src=videoUrl
+
+const safeTitle=cleanFilename(title)
+
+const videoData={
+id:id,
+title:safeTitle,
+url:videoUrl
+}
+
+videos.push(videoData)
+
+btn.onclick=()=>downloadVideo(btn,videoData)
+
+status.innerText="Ready"
+
+successCount++
+
+}
+catch(e){
+
+if(retry<2){
+
+status.innerText="Retrying..."
+
+await sleep(1200)
+
+return fetchVideoData(id,card,retry+1)
+
+}
+
+status.innerText="Failed"
+
+failedIds.push(id)
+
+}
+
+}
+
+generateBtn.onclick=convert
+
+async function convert(){
+
+generateBtn.innerText="Cooking..."
+generateBtn.disabled=true
+
+videos=[]
+successCount=0
+failedIds=[]
+
+const lines=textarea.value.split("\n").filter(x=>x.trim()!=="")
+
+const total=lines.length
+let current=0
+
+const container=document.getElementById("videos")
+container.innerHTML=""
+
+for(const line of lines){
+
+const id=extractVideoId(line)
+
+if(!id) continue
+
+current++
+
+updateReport(current,total)
+
+const card=document.createElement("div")
+
+card.className="card"
+
+card.innerHTML=`
+
+<video controls></video>
+
+<button class="downloadBtn">Download</button>
+
+<div class="id">ID: ${id}</div>
+
+<div class="title">Title: ...</div>
+<div class="moreBtn">More</div>
+<div class="status">Waiting...</div>
+
+`
+
+// insert new cards on top
+container.prepend(card)
+
+await fetchVideoData(id,card)
+const moreBtn=card.querySelector(".moreBtn")
+
+moreBtn.onclick=()=>{
+
+const title=card.querySelector(".title")
+
+title.classList.toggle("expanded")
+
+moreBtn.innerText=
+title.classList.contains("expanded")
+? "Less"
+: "More"
+
+}
+
+updateReport(current,total)
+
+await sleep(600)
+
+}
+
+generateBtn.innerText="Ready"
+
+downloadAllBtn.disabled=videos.length===0
+resetBtn.disabled=false
+
+updateReport(total,total)
+
+}
+
+function updateReport(current,total){
+
+report.style.display="block"
+
+report.innerHTML=`
+
+<b>Live Report</b><br>
+
+Generating video ${current} of ${total}<br><br>
+
+Successful: ${successCount}<br>
+
+Failed: ${failedIds.length}<br>
+
+Failed IDs: ${failedIds.length ? failedIds.join(", ") : "None"}
+
+`
+
+}
+
+async function downloadVideo(button,video){
+
+if(button.classList.contains("done")) return
+
+button.innerText="Downloading..."
+button.disabled=true
+
+try{
+
+const res=await fetch(video.url)
+
+const blob=await res.blob()
+
+const blobUrl=URL.createObjectURL(blob)
+
+const a=document.createElement("a")
+
+a.href=blobUrl
+a.download=video.title+".mp4"
+
+document.body.appendChild(a)
+
+a.click()
+
+a.remove()
+
+URL.revokeObjectURL(blobUrl)
+
+button.innerText="Downloaded"
+button.classList.add("done")
+
+}
+catch(e){
+
+button.innerText="Failed"
+button.disabled=false
+
+}
+
+}
+
+downloadAllBtn.onclick=downloadAllVideos
+
+async function downloadAllVideos(){
+
+if(videos.length===0) return
+
+const buttons=document.querySelectorAll(".downloadBtn")
+
+const total=buttons.length
+let current=0
+
+downloadAllBtn.disabled=true
+
+for(let i=0;i<buttons.length;i++){
+
+const btn=buttons[i]
+
+if(btn.classList.contains("done")){
+current++
+continue
+}
+
+current++
+
+downloadAllBtn.innerText=`Downloading ${current} / ${total}`
+
+btn.click()
+
+await sleep(1500)
+
+}
+
+downloadAllBtn.innerText="Downloaded"
+
+}
+
+resetBtn.onclick=()=>{
+
+textarea.value=""
+
+const container=document.getElementById("videos")
+container.innerHTML=""
+
+videos=[]
+successCount=0
+failedIds=[]
+
+report.style.display="none"
+report.innerHTML=""
+
+generateBtn.innerText="Generate Videos"
+generateBtn.disabled=true
+
+downloadAllBtn.innerText="Download All"
+downloadAllBtn.disabled=true
+
+resetBtn.disabled=true
+
+}
+
+
+</script>
+
+</body>
+</html>
