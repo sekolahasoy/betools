@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FB / IG Reels Downloader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111827;
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: #1f2937;
+      padding: 24px;
+      border-radius: 18px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.3);
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      margin: 16px 0;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:disabled {
+      background: #64748b;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #facc15;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Facebook / Instagram Downloader</h1>
+    <p>Paste a Facebook video or Instagram Reels URL. Output will be Mac-compatible MP4.</p>
+
+    <input id="urlInput" type="text" placeholder="Paste video URL here..." />
+
+    <button id="downloadBtn" onclick="downloadVideo()">Download MP4</button>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const API_BASE = "https://asoy.onrender.com";
+
+    async function downloadVideo() {
+      const url = document.getElementById("urlInput").value.trim();
+      const btn = document.getElementById("downloadBtn");
+      const status = document.getElementById("status");
+
+      if (!url) {
+        status.textContent = "Please paste a URL first.";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Downloading...";
+      status.textContent = "Processing video. This may take a while...";
+
+      const formData = new FormData();
+      formData.append("url", url);
+
+      try {
+        const response = await fetch(`${API_BASE}/download`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          let message = "Download failed.";
+
+          try {
+            const data = await response.json();
+            message = data.detail || message;
+          } catch {
+            message = await response.text();
+          }
+
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+
+const disposition = response.headers.get("Content-Disposition");
+const filename = getFilenameFromDisposition(disposition);
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        window.URL.revokeObjectURL(downloadUrl);
+
+        status.textContent = "Download finished.";
+
+      } catch (err) {
+        status.textContent = "Error: " + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Download MP4";
+      }
+    }
+
+    function getFilenameFromDisposition(disposition) {
+  if (!disposition) return "video.mp4";
+
+  // Handles: filename*=UTF-8''Title%20Here.mp4
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  // Handles: filename="Title Here.mp4"
+  const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
+  if (normalMatch && normalMatch[1]) {
+    return normalMatch[1];
+  }
+
+  return "video.mp4";
+}
+  </script>
+
+</body>
+</html>
